@@ -1,4 +1,4 @@
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { ROUTE_TYPES, ROUTES, getRoute } from "./data/routes";
 import { createHistory, defaultRunState, loadRunState, nextCheckpointStatus, saveRunState } from "./state";
 import { Checkpoint, CheckpointStatus, RouteTemplate, RouteType, RunState } from "./types";
@@ -24,6 +24,23 @@ function buildExport(run: RunState): string {
 function routeScore(route: RouteTemplate): number {
   const difficultyScore = route.difficulty === "Hard" ? 3 : route.difficulty === "Moderate" ? 2 : 1;
   return route.checkpoints.length * 2 + difficultyScore;
+}
+
+function checkpointPosition(index: number, count: number): { left: number; top: number } {
+  const five = [
+    { left: 15, top: 72 },
+    { left: 32, top: 58 },
+    { left: 50, top: 43 },
+    { left: 68, top: 31 },
+    { left: 84, top: 18 }
+  ];
+  const four = [
+    { left: 16, top: 70 },
+    { left: 38, top: 54 },
+    { left: 61, top: 36 },
+    { left: 83, top: 20 }
+  ];
+  return (count <= 4 ? four : five)[index] || five[five.length - 1];
 }
 
 function App() {
@@ -205,13 +222,19 @@ function App() {
                 key={route.id}
                 className={`route-card ${route.id === activeRoute.id ? "selected" : ""}`}
                 type="button"
-                style={{ "--accent": route.accent } as React.CSSProperties}
+                style={{ "--accent": route.accent } as CSSProperties}
                 onClick={() => chooseRoute(route.id)}
               >
                 <span>{route.type}</span>
                 <strong>{route.name}</strong>
                 <small>{route.start} to {route.end}</small>
-                <em>{route.difficulty} · score {routeScore(route)}</em>
+                <div className="route-pips" aria-hidden="true">
+                  {route.checkpoints.map((checkpoint) => {
+                    const status = route.id === activeRoute.id ? run.checkpointStatus[checkpoint.id] || "pending" : "pending";
+                    return <i key={checkpoint.id} className={status} />;
+                  })}
+                </div>
+                <em>{route.difficulty} / score {routeScore(route)}</em>
               </button>
             ))}
           </div>
@@ -226,22 +249,32 @@ function App() {
             </div>
           </div>
           <div className="parchment-map">
-            <div className="map-title">
-              <span>{activeRoute.type} route</span>
-              <h2>{activeRoute.name}</h2>
-              <p>{activeRoute.summary}</p>
-            </div>
-            <div className="route-line" aria-hidden="true">
+            <div className="map-scene">
+              <div className="map-title">
+                <span>{activeRoute.type} route</span>
+                <h2>{activeRoute.name}</h2>
+                <p>{activeRoute.summary}</p>
+              </div>
+              <div className="map-compass" aria-hidden="true">N</div>
+              <div className="route-legend" aria-label="Checkpoint legend">
+                <span><i className="cleared" />Cleared</span>
+                <span><i className="reached" />Reached</span>
+                <span><i className="pending" />Pending</span>
+              </div>
               {activeRoute.checkpoints.map((checkpoint, index) => {
                 const status = run.checkpointStatus[checkpoint.id] || "pending";
+                const position = checkpointPosition(index, activeRoute.checkpoints.length);
                 return (
-                  <span
+                  <button
                     key={checkpoint.id}
                     className={`map-node ${status}`}
-                    style={{ left: `${10 + index * (80 / Math.max(1, activeRoute.checkpoints.length - 1))}%` }}
+                    style={{ left: `${position.left}%`, top: `${position.top}%` }}
+                    type="button"
+                    onClick={() => cycleCheckpoint(checkpoint)}
+                    aria-label={`${checkpoint.name}: ${STATUS_LABELS[status]}`}
                   >
                     {index + 1}
-                  </span>
+                  </button>
                 );
               })}
             </div>
